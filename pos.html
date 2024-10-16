@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TLK GREENS POS System</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; }
+        .container { width: 90%; margin: 20px auto; }
+        .header { background-color: #2d5f2e; padding: 20px; text-align: center; color: white; }
+        .header h1 { margin: 0; font-size: 28px; }
+        .login-section, .pos-system { margin: 20px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .login-section { width: 40%; }
+        input, button { padding: 10px; margin: 10px 0; width: 100%; border: 1px solid #ccc; border-radius: 5px; }
+        button { background-color: #2d5f2e; color: white; cursor: pointer; }
+        button:hover { background-color: #204d20; }
+        .hidden { display: none; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        table th, table td { padding: 12px; border: 1px solid #ccc; text-align: left; }
+        table th { background-color: #f4f4f9; }
+        .error { color: red; }
+        .bill-section { margin-top: 20px; }
+        .button { padding: 10px 20px; background-color: #2d5f2e; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .button:hover { background-color: #204d20; }
+        .bill-box { border: 1px solid #ccc; padding: 20px; width: 21cm; margin: 0 auto; border-radius: 5px; }
+        @media print {
+            .bill-box { display: block; }
+            .non-printable { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>TLK GREENS POS System</h1>
+    </div>
+
+    <div class="login-section" id="login-section">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Username" required />
+        <input type="password" id="password" placeholder="Password" required />
+        <button onclick="login()">Login</button>
+        <p class="error" id="login-error"></p>
+    </div>
+
+    <div class="pos-system hidden" id="pos-system">
+        <h2>Customer Information</h2>
+        <input type="text" id="customer-name" placeholder="Customer Name" required />
+        <input type="text" id="customer-phone" placeholder="Phone Number" required />
+        <input type="email" id="customer-email" placeholder="Email Address" />
+
+        <h2>Product Management</h2>
+        <input type="text" id="product-name" placeholder="Product Name" />
+        <input type="number" id="product-price" placeholder="Product Price" />
+        <button onclick="addProduct()">Add Product</button>
+        <table id="product-list">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>Price</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <h2>Promo Code Management</h2>
+        <input type="text" id="promo-code" placeholder="Promo Code" />
+        <input type="number" id="discount" placeholder="Discount %" />
+        <button onclick="generatePromoCode()">Generate Promo Code</button>
+        <table id="promo-code-list">
+            <thead>
+                <tr>
+                    <th>Promo Code</th>
+                    <th>Discount</th>
+                    <th>Uses Left</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <h2>Bill Generation</h2>
+        <select id="selected-product"></select>
+        <input type="number" id="quantity" value="1" min="1" />
+        <input type="text" id="apply-promo" placeholder="Apply Promo Code" />
+        <button onclick="addToBill()">Add to Bill</button>
+
+        <div class="bill-section">
+            <h3>Bill</h3>
+            <div class="bill-box non-printable" id="bill-box">
+                <h4>Customer: <span id="bill-customer-name"></span></h4>
+                <h4>Phone: <span id="bill-customer-phone"></span></h4>
+                <h4>Email: <span id="bill-customer-email"></span></h4>
+                <table id="bill-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Price</th>
+                            <th>Quantity</th>
+                            <th>Discount</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <h4>Total: ₹<span id="total-amount">0</span></h4>
+                <button class="button" onclick="printBill()">Print Bill</button>
+            </div>
+        </div>
+
+        <h2>Sales History</h2>
+        <button class="button" onclick="downloadSalesHistoryCSV()">Download Sales History CSV</button>
+        <table id="sales-history">
+            <thead>
+                <tr>
+                    <th>Customer Name</th>
+                    <th>Product</th>
+                    <th>Quantity</th>
+                    <th>Total</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const username = "user@tlk";
+    const password = "tlkpos***";
+    let productList = JSON.parse(localStorage.getItem('productList')) || [];
+    let promoCodes = JSON.parse(localStorage.getItem('promoCodes')) || [];
+    let billItems = [];
+    let totalAmount = 0;
+    let salesHistory = JSON.parse(localStorage.getItem('salesHistory')) || [];
+
+    function login() {
+        const enteredUsername = document.getElementById('username').value;
+        const enteredPassword = document.getElementById('password').value;
+
+        if (enteredUsername === username && enteredPassword === password) {
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('pos-system').classList.remove('hidden');
+            loadSalesHistory();
+            loadProducts();
+            loadPromoCodes();
+        } else {
+            document.getElementById('login-error').textContent = "Invalid username or password!";
+        }
+    }
+
+    function addProduct() {
+        const productName = document.getElementById('product-name').value;
+        const productPrice = document.getElementById('product-price').value;
+
+        if (productName && productPrice) {
+            productList.push({ name: productName, price: parseFloat(productPrice) });
+            saveProductList();
+            loadProducts();
+            document.getElementById('product-name').value = '';
+            document.getElementById('product-price').value = '';
+        }
+    }
+
+    function loadProducts() {
+        const productTable = document.querySelector('#product-list tbody');
+        const productSelect = document.getElementById('selected-product');
+        productTable.innerHTML = '';
+        productSelect.innerHTML = '<option value="">Select Product</option>';
+
+        productList.forEach((product, index) => {
+            productTable.innerHTML += `<tr>
+                <td>${product.name}</td>
+                <td>₹${product.price}</td>
+                <td><button onclick="removeProduct(${index})">Remove</button></td>
+            </tr>`;
+            productSelect.innerHTML += `<option value="${index}">${product.name} - ₹${product.price}</option>`;
+        });
+    }
+
+    function removeProduct(index) {
+        productList.splice(index, 1);
+        saveProductList();
+        loadProducts();
+    }
+
+    function saveProductList() {
+        localStorage.setItem('productList', JSON.stringify(productList));
+    }
+
+    function generatePromoCode() {
+        const promoCode = document.getElementById('promo-code').value;
+        const discount = document.getElementById('discount').value;
+
+        if (promoCode && discount) {
+            promoCodes.push({ code: promoCode, discount: discount, usesLeft: 10, active: true });
+            savePromoCodes();
+            loadPromoCodes();
+            document.getElementById('promo-code').value = '';
+            document.getElementById('discount').value = '';
+        }
+    }
+
+    function loadPromoCodes() {
+        const promoTable = document.querySelector('#promo-code-list tbody');
+        promoTable.innerHTML = '';
+
+        promoCodes.forEach((promo, index) => {
+            promoTable.innerHTML += `<tr>
+                <td>${promo.code}</td>
+                <td>${promo.discount}%</td>
+                <td>${promo.usesLeft}</td>
+                <td>${promo.active ? 'Active' : 'Inactive'}</td>
+                <td><button onclick="removePromoCode(${index})">Remove</button></td>
+            </tr>`;
+        });
+    }
+
+    function removePromoCode(index) {
+        promoCodes.splice(index, 1);
+        savePromoCodes();
+        loadPromoCodes();
+    }
+
+    function savePromoCodes() {
+        localStorage.setItem('promoCodes', JSON.stringify(promoCodes));
+    }
+
+    function addToBill() {
+        const selectedProductIndex = document.getElementById('selected-product').value;
+        const quantity = document.getElementById('quantity').value;
+        const applyPromo = document.getElementById('apply-promo').value;
+        const customerName = document.getElementById('customer-name').value;
+        const customerPhone = document.getElementById('customer-phone').value;
+        const customerEmail = document.getElementById('customer-email').value;
+
+        if (selectedProductIndex !== '' && quantity > 0) {
+            const product = productList[selectedProductIndex];
+            const totalPrice = product.price * quantity;
+            let discount = 0;
+
+            if (applyPromo) {
+                const promo = promoCodes.find(p => p.code === applyPromo && p.active);
+                if (promo) {
+                    discount = (promo.discount / 100) * totalPrice;
+                    promo.usesLeft -= 1;
+                    if (promo.usesLeft <= 0) {
+                        promo.active = false;
+                    }
+                }
+            }
+
+            totalAmount += totalPrice - discount;
+            billItems.push({ product: product.name, price: product.price, quantity: quantity, discount: discount, total: totalPrice - discount });
+
+            document.getElementById('bill-customer-name').textContent = customerName;
+            document.getElementById('bill-customer-phone').textContent = customerPhone;
+            document.getElementById('bill-customer-email').textContent = customerEmail;
+
+            const billTable = document.querySelector('#bill-table tbody');
+            billTable.innerHTML = '';
+            billItems.forEach(item => {
+                billTable.innerHTML += `<tr>
+                    <td>${item.product}</td>
+                    <td>₹${item.price}</td>
+                    <td>${item.quantity}</td>
+                    <td>₹${item.discount}</td>
+                    <td>₹${item.total}</td>
+                </tr>`;
+            });
+
+            document.getElementById('total-amount').textContent = totalAmount.toFixed(2);
+            saveSalesHistory(customerName, customerPhone, billItems, totalAmount);
+        }
+    }
+
+    function saveSalesHistory(customerName, customerPhone, items, total) {
+        salesHistory.push({ customerName, customerPhone, items, total, date: new Date().toLocaleString() });
+        localStorage.setItem('salesHistory', JSON.stringify(salesHistory));
+        loadSalesHistory();
+    }
+
+    function loadSalesHistory() {
+        const salesTable = document.querySelector('#sales-history tbody');
+        salesTable.innerHTML = '';
+
+        salesHistory.forEach((sale, index) => {
+            const products = sale.items.map(i => i.product).join(', ');
+            const quantity = sale.items.reduce((acc, item) => acc + item.quantity, 0);
+            salesTable.innerHTML += `<tr>
+                <td>${sale.customerName}</td>
+                <td>${products}</td>
+                <td>${quantity}</td>
+                <td>₹${sale.total}</td>
+                <td>${sale.date}</td>
+                <td><button onclick="removeSale(${index})">Remove</button></td>
+            </tr>`;
+        });
+    }
+
+    function removeSale(index) {
+        salesHistory.splice(index, 1);
+        localStorage.setItem('salesHistory', JSON.stringify(salesHistory));
+        loadSalesHistory();
+    }
+
+    function printBill() {
+        const billBox = document.getElementById('bill-box');
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`<html><head><title>Print Bill</title>`);
+        printWindow.document.write(`<style>body { font-family: Arial, sans-serif; } table { width: 100%; border-collapse: collapse; } th, td { padding: 10px; border: 1px solid #ccc; } h2 { color: #2d5f2e; }</style>`);
+        printWindow.document.write(`</head><body><h2>Bill</h2>`);
+        printWindow.document.write(billBox.innerHTML);
+        printWindow.document.write(`</body></html>`);
+        printWindow.document.close();
+        printWindow.print();
+    }
+
+    function downloadSalesHistoryCSV() {
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Customer Name,Product,Quantity,Total,Date\n";
+
+        salesHistory.forEach(sale => {
+            const products = sale.items.map(i => i.product).join('; ');
+            const quantity = sale.items.reduce((acc, item) => acc + item.quantity, 0);
+            csvContent += `${sale.customerName},${products},${quantity},${sale.total},${sale.date}\n`;
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "sales_history.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Load data on initial page load
+    loadProducts();
+    loadPromoCodes();
+    loadSalesHistory();
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
